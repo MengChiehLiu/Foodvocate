@@ -4,14 +4,16 @@ import os
 import pandas as pd
 from queue import Queue
 from utils.runThreading import runThreading
-import re
 
 load_dotenv()
-COOKIE = os.environ["COOKIE"]
-csrftoken = re.findall("csrftoken=(\w*);", COOKIE)[0]
+SESSION = os.environ['SESSION']
+CRSF = os.environ['CRSF']
+cookies = {
+    'csrftoken': CRSF,
+    'sessionid': SESSION
+}
 
 headers = {
-    'cookie': COOKIE,
     'accept': '*/*',
     'accept-encoding': 'gzip, deflate, br',
     'accept-language': 'zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7',
@@ -20,43 +22,70 @@ headers = {
     'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36',
     'sec-fetch-mode': 'cors',
     'sec-fetch-site': 'same-origin',
-    'x-csrftoken': csrftoken,
+    'x-csrftoken': CRSF,
+    'x-ig-app-id': '936619743392459',
+    'x-requested-with': 'XMLHttpRequest'
+}
+
+post_headers = {
+    'content-type': 'application/x-www-form-urlencoded',
+    'accept': '*/*',
+    'accept-encoding': 'gzip, deflate, br',
+    'accept-language': 'zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7',
+    'sec-ch-ua': '"Chromium";v="112", "Google Chrome";v="112", "Not:A-Brand";v="99"',
+    'sec-ch-ua-full-version-list': '"Chromium";v="112.0.5615.138", "Google Chrome";v="112.0.5615.138", "Not:A-Brand";v="99.0.0.0"',
+    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36',
+    'sec-fetch-mode': 'cors',
+    'sec-fetch-site': 'same-origin',
+    'x-csrftoken': CRSF,
     'x-ig-app-id': '936619743392459',
     'x-requested-with': 'XMLHttpRequest'
 }
 
 def get_fans(full_name):
     url = f"https://www.instagram.com/api/v1/users/web_profile_info/?username={full_name}"
-    response = requests.get(url=url, headers=headers).json()
+    response = requests.get(url=url, headers=headers, cookies=cookies).json()
     return response['data']['user']['edge_followed_by']['count']
-
 
 def get_posts(location_id):
     post_info = []
-    url = f"https://www.instagram.com/api/v1/locations/web_info/?location_id={location_id}"
-    response = requests.get(url=url, headers=headers).json()
-    rows = response['native_location_data']['ranked']['sections'][1:]
     check_duplicate = set()
-    for row in rows:
-        cols = row['layout_content']['medias']
-        for col in cols:
-            media = col['media']
-            taken_at = media['taken_at']
-            like_count = media['like_count']
-            text = media['caption']['text']
-            user = media['user']
-            username = user['username']
 
-            if username not in check_duplicate:
-                check_duplicate.add(username)
-                post_info.append((username, taken_at, like_count, text))
+    url = f'https://www.instagram.com/api/v1/locations/{location_id}/sections/'
+    payload = {
+        'surface': 'grid',
+        'tab': 'ranked',
+        'max_id': '',
+        'next_media_ids': []
+    }
 
-                if username not in bloggers:
-                    bloggers[username] = 1
-                    fans = get_fans(username)
-                    bloggers_info.append((username, user['full_name'], user['profile_pic_url'], fans))
-                else:
-                    bloggers[username] += 1
+    for i in range(2):
+        payload['page'] = i
+        response = requests.post(url=url, headers=post_headers, data=payload, cookies=cookies).json()
+
+        rows = response['sections'][1-i:]
+        for row in rows:
+            cols = row['layout_content']['medias']
+            for col in cols:
+                media = col['media']
+                taken_at = media['taken_at']
+                like_count = media['like_count']
+                text = media['caption']['text']
+                user = media['user']
+                username = user['username']
+
+                if username not in check_duplicate:
+                    check_duplicate.add(username)
+                    post_info.append((username, taken_at, like_count, text))
+
+                    if username not in bloggers:
+                        bloggers[username] = 1
+                        fans = get_fans(username)
+                        bloggers_info.append((username, user['full_name'], user['profile_pic_url'], fans))
+                    else:
+                        bloggers[username] += 1
+
+        payload['max_id'] = response['next_max_id']
 
     post_df = pd.DataFrame(post_info, columns=["username", "taken_at", "like_count", "text"]).set_index('username', drop=True)
     post_df.to_csv(f'results/posts/{location_id}.csv')
