@@ -1,5 +1,5 @@
 # Foodvocate
-![logo](data/imgs/logo.png)
+<div align=center><img width="150" height="150" src="https://raw.githubusercontent.com/MengChiehLiu/Foodvocate/main/data/imgs/logo.png"/></div>
 
 ## Introduction
 An analysis on the cascading behavior between Taiwanese Instagram food bloggers, based on Asynchronous Independent Cascade Model (AsIC) and Influence Maximization Model.
