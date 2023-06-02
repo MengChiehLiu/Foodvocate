@@ -1,3 +1,10 @@
+'''
+Foodvocate: Multithreading
+Author: Meng-Chieh Liu
+Github: https://github.com/MengChiehLiu
+Date: 2023/5/22
+'''
+
 from threading import Thread
 
 def runThreading(my_queue, func, thread_amount):
